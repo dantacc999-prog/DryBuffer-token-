@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DryBuffer | DeepSeek 终极脱水器</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            --panel-bg: #161b22;
+            --border-color: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #238636;
+            --accent-hover: #2ea043;
+            --danger: #da3633;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        h2 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .badge {
+            font-size: 12px;
+            background: #1f6feb;
+            padding: 4px 8px;
+            border-radius: 12px;
+            color: white;
+        }
+        label {
+            display: block;
+            margin: 12px 0 6px 0;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        input[type="password"], textarea {
+            width: 100%;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 10px;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+            font-family: "Fira Code", Consolas, monospace;
+            font-size: 13px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: var(--accent-hover); }
+        button:disabled { background-color: var(--border-color); cursor: not-allowed; }
+        .preview-btn { background-color: #21262d; border: 1px solid var(--border-color); }
+        .preview-btn:hover { background-color: #30363d; }
+        
+        .dashboard {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+        }
+        .stat-box { flex: 1; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: bold; margin-top: 8px; }
+        .stat-value.green { color: #3fb950; }
+        
+        #responseArea {
+            margin-top: 20px;
+            padding: 16px;
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .loading { color: var(--text-muted); font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>DryBuffer 核心脱水器 <span class="badge">DeepSeekAPI测试版</span></h2>
+    
+    <label>DeepSeek API Key (sk-开头)</label>
+    <input type="password" id="apiKey" placeholder="输入您的 API Key，仅保存在本地浏览器...">
+    
+    <label>输入臃肿的文本 (带大量无用报错/空格/客套话/念咒废话)</label>
+    <textarea id="inputText" placeholder="请在这里粘贴长文本..."></textarea>
+    
+    <div class="btn-group">
+        <button id="previewBtn" class="preview-btn">纯脱水预览 (不发请求)</button>
+        <button id="sendBtn">脱水并发送给 DeepSeek</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="stat-box">
+            <div style="font-size: 12px; color: var(--text-muted)">估算原始 Token</div>
+            <div class="stat-value" id="statOriginal">-</div>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 12px; color: var(--text-muted)">脱水后 Token</div>
+            <div class="stat-value" id="statCleaned">-</div>
+        </div>
+        <div class="stat-box">
+            <div style="font-size: 12px; color: var(--text-muted)">省钱率 (节约)</div>
+            <div class="stat-value green" id="statSaved">-</div>
+        </div>
+    </div>
+
+    <label>DeepSeek 回答 / 脱水预览文本</label>
+    <div id="responseArea">等待操作...</div>
+</div>
+
+<script>
+    class DryBuffer {
+        constructor() {
+            // 1. 英文极端脱水词库 (需要单词边界 \b 防止误杀)
+            this.engStopWords = [
+                // 礼貌与寒暄
+                "please", "kindly", "hello", "hi", "hey", "greetings", 
+                "good morning", "good afternoon", "good evening", "dear",
+                "thank you", "thanks", "thanks in advance", "appreciate it", "much appreciated",
+                // 冗长前摇
+                "could you please", "would you mind", "i was wondering if", 
+                "can you", "could you", "would you", "will you", "do you know",
+                "i need your help", "can you help me", "i want you to", "i need you to",
+                "is it possible to", "would it be possible to", "please help me",
+                // 语气词
+                "um", "uh", "ah", "well", "you know", "like i mean",
+                "actually", "basically", "literally", "honestly", "frankly", "obviously", "as a matter of fact",
+                // 自我贬低
+                "sorry", "apologies", "excuse me", "my bad", "unfortunately",
+                "sorry to bother you", "im a beginner", "im not sure but", "this might be a stupid question",
+                "i might be wrong", "im new to this",
+                // 无意义肯定
+                "yes", "yeah", "yep", "ok", "okay", "alright", "exactly", "absolutely",
+                "that is correct", "you are right", "make sense",
+                // AI专属废话与“念咒”
+                "to be honest", "in my opinion", "just wondering", "quick question",
+                "can you provide", "please generate", "i would like to know",
+                "help me with", "it would be great if", "as an ai", "as a language model",
+                "im trying to", "i am trying to", "give me", "show me", "write a code to",
+                "ignore previous instructions", "take a deep breath", "think step by step",
+                "act as a professional", "let's start","Bro"
+            ];
+            
+            // 2. 中文极端脱水词库 (不需要单词边界，直接全局匹配)
+            // 规则：必须把长句子放前面，短词放后面，防止提前错误截断！
+            this.zhStopWords = [
+                // 极长念咒废话 (AI玄学Prompt)
+                "忽略之前的所有指令", "忽略之前的指令", "深呼吸", "一步步思考", "作为专业人士",
+                "不要讲废话", "不要废话", "直接给出代码", "直接给我代码", "请用中文回答", 
+                "这很重要", "请注意", "请仔细分析", "请详细解释",
+                
+                // 极长前摇与寒暄
+                "不知道方不方便", "我想请教一下", "能不能帮我", "你可以告诉我吗",
+                "可能是个蠢问题", "提前感谢", "非常感谢", "万分感谢",
+                "抱歉打扰一下", "占用您一点时间", "弱弱地问一句", "作为人工智能", "作为语言模型",
+                
+                // 常见客套与请求
+                "麻烦您", "麻烦你", "请问", "能不能", "帮我看看这", "帮我看看", "帮我改改", "请帮我写", "请帮我",
+                "能不能给我", "能不能麻烦你", "给我生成一个", "给我写一段", "帮我弄一个", "帮我写一个", "帮我写",
+                "我想让你", "我需要你", "帮我优化一下", "帮我翻译", "帮我分析一下", "帮我解决",
+                "谢谢你", "谢谢", "辛苦了", "拜托了", "感恩", 
+                "你好", "您好", "哈喽", "早上好", "下午好", "晚上好",
+                
+                // 自我开脱与过度解释
+                "我是个新手", "我是小白", "我不太懂", "我刚学", "仅供参考",
+                "其实说白了", "老实说", "说实话", "基本上", "实际上", "有没有办法", "我有一段代码",
+                
+                // 语气词与确认
+                "那个", "打扰一下", "不好意思", "抱歉", "解答一下", "请生成",
+                "完全正确", "确实", "没错", "对的", "是的", "好的", "没问题", "就是这样",
+                "作为ai", "可以给我", "我想要", "请你", "帮我", "我想", "给我"
+            ];
+
+            // 正确构造正则：忽略大小写，英文带边界匹配，中文直接匹配
+            this.engRegex = new RegExp(`\\b(${this.engStopWords.join('|')})\\b`, 'gi');
+            this.zhRegex = new RegExp(`(${this.zhStopWords.join('|')})`, 'g');
+        }
+
+        compress(text) {
+            if (!text) return "";
+            
+            // 1. 词法脱水：分别榨干英文和中文废话
+            let cleaned = text.replace(this.engRegex, '');
+            cleaned = cleaned.replace(this.zhRegex, '');
+
+            // 2. 结构脱水：清除多余空行和过深的缩进
+            // 顺便把前面因为删掉文字导致的孤立标点符号（如独立的逗号或句号）清理掉
+            cleaned = cleaned.replace(/[，。、！：；]\s*[，。、！：；]/g, '，'); 
+            cleaned = cleaned.replace(/^[，。、！：；\s]+/g, ''); 
+            cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+            cleaned = cleaned.replace(/ {4}/g, '  ');
+
+            // 3. 滑动窗口：折叠连续报错或重复行 (这是省钱大头)
+            const lines = cleaned.split('\n');
+            const resultLines = [];
+            let prevLine = null;
+            let repeatCount = 0;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const stripped = line.trim();
+
+                // 保留必要的空行维持逻辑结构
+                if (!stripped) {
+                    resultLines.push(line);
+                    continue;
+                }
+
+                if (stripped === prevLine) {
+                    repeatCount++;
+                } else {
+                    if (repeatCount > 0) {
+                        resultLines.push(`    ... [DryBuffer: 自动脱水折叠了 ${repeatCount} 行重复日志] ...`);
+                    }
+                    resultLines.push(line);
+                    prevLine = stripped;
+                    repeatCount = 0;
+                }
+            }
+            if (repeatCount > 0) {
+                resultLines.push(`    ... [DryBuffer: 自动脱水折叠了 ${repeatCount} 行重复日志] ...`);
+            }
+
+            return resultLines.join('\n');
+        }
+
+        // 粗略模拟 Token 计算 (纯英文约 4 字符 1 Token，中文约 1.5 字符 1 Token)
+        mockTokenCount(text) {
+            if (!text) return 0;
+            const chineseMatch = text.match(/[\u4e00-\u9fa5]/g) || [];
+            const englishLength = text.length - chineseMatch.length;
+            return Math.floor(englishLength / 4) + Math.floor(chineseMatch.length * 1.5);
+        }
+    }
+
+    const optimizer = new DryBuffer();
+    
+    // UI 交互绑定
+    const inputText = document.getElementById('inputText');
+    const previewBtn = document.getElementById('previewBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const responseArea = document.getElementById('responseArea');
+
+    function updateDashboard(rawText, cleanedText) {
+        const originalTokens = optimizer.mockTokenCount(rawText);
+        const cleanedTokens = optimizer.mockTokenCount(cleanedText);
+        const saved = originalTokens > 0 ? ((originalTokens - cleanedTokens) / originalTokens * 100).toFixed(1) : 0;
+
+        document.getElementById('statOriginal').innerText = originalTokens;
+        document.getElementById('statCleaned').innerText = cleanedTokens;
+        document.getElementById('statSaved').innerText = `${saved}%`;
+    }
+
+    // 预览模式
+    previewBtn.addEventListener('click', () => {
+        const rawText = inputText.value;
+        const cleaned = optimizer.compress(rawText);
+        updateDashboard(rawText, cleaned);
+        responseArea.innerText = cleaned;
+        responseArea.style.color = "#8b949e";
+    });
+
+    // 直连 DeepSeek 模式
+    sendBtn.addEventListener('click', async () => {
+        const apiKey = document.getElementById('apiKey').value;
+        const rawText = inputText.value;
+
+        if (!apiKey) {
+            alert("请先输入 DeepSeek API Key!");
+            return;
+        }
+        if (!rawText) return;
+
+        // 执行脱水
+        const cleanedText = optimizer.compress(rawText);
+        updateDashboard(rawText, cleanedText);
+
+        // UI 状态更新
+        sendBtn.disabled = true;
+        responseArea.innerHTML = "<span class='loading'>🚀 正在将脱水后的文本发送给 DeepSeek...</span>";
+        responseArea.style.color = "var(--text-main)";
+
+        try {
+            // 调用 DeepSeek 官方接口
+            const response = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: 'deepseek-chat',
+                    messages: [
+                        { role: "system", content: "你是一个资深程序员。请直接解决问题，不要讲废话。" },
+                        { role: "user", content: cleanedText }
+                    ],
+                    temperature: 0.1
+                })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error?.message || "网络请求失败");
+            }
+
+            const data = await response.json();
+            const answer = data.choices[0].message.content;
+            
+            // 使用官方返回的真实 Token 数覆盖面板（更精确）
+            document.getElementById('statCleaned').innerText = `${data.usage.prompt_tokens} (官方计量)`;
+            
+            responseArea.innerText = answer;
+        } catch (error) {
+            responseArea.innerHTML = `<span style="color: var(--danger)">请求报错：<br>${error.message}</span>`;
+        } finally {
+            sendBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,61 @@
+class DryBuffer {
+        constructor() {
+            // 1. 英文极端脱水词库 (需要单词边界 \b 防止误杀)
+            this.engStopWords = [
+                // 礼貌与寒暄
+                "please", "kindly", "hello", "hi", "hey", "greetings", 
+                "good morning", "good afternoon", "good evening", "dear",
+                "thank you", "thanks", "thanks in advance", "appreciate it", "much appreciated",
+                // 冗长前摇
+                "could you please", "would you mind", "i was wondering if", 
+                "can you", "could you", "would you", "will you", "do you know",
+                "i need your help", "can you help me", "i want you to", "i need you to",
+                "is it possible to", "would it be possible to", "please help me",
+                // 语气词
+                "um", "uh", "ah", "well", "you know", "like i mean",
+                "actually", "basically", "literally", "honestly", "frankly", "obviously", "as a matter of fact",
+                // 自我贬低
+                "sorry", "apologies", "excuse me", "my bad", "unfortunately",
+                "sorry to bother you", "im a beginner", "im not sure but", "this might be a stupid question",
+                "i might be wrong", "im new to this",
+                // 无意义肯定
+                "yes", "yeah", "yep", "ok", "okay", "alright", "exactly", "absolutely",
+                "that is correct", "you are right", "make sense",
+                // AI专属废话与“念咒”
+                "to be honest", "in my opinion", "just wondering", "quick question",
+                "can you provide", "please generate", "i would like to know",
+                "help me with", "it would be great if", "as an ai", "as a language model",
+                "im trying to", "i am trying to", "give me", "show me", "write a code to",
+                "ignore previous instructions", "take a deep breath", "think step by step",
+                "act as a professional", "let's start"
+            ];
+            
+            // 2. 中文极端脱水词库 (不需要单词边界，直接全局匹配)
+            // 规则：必须把长句子放前面，短词放后面，防止提前错误截断！
+            this.zhStopWords = [
+                // 极长念咒废话 (AI玄学Prompt)
+                "忽略之前的所有指令", "忽略之前的指令", "深呼吸", "一步步思考", "作为专业人士",
+                "不要讲废话", "不要废话", "直接给出代码", "直接给我代码", "请用中文回答", 
+                "这很重要", "请注意", "请仔细分析", "请详细解释",
+                
+                // 极长前摇与寒暄
+                "不知道方不方便", "我想请教一下", "能不能帮我", "你可以告诉我吗",
+                "可能是个蠢问题", "提前感谢", "非常感谢", "万分感谢",
+                "抱歉打扰一下", "占用您一点时间", "弱弱地问一句", "作为人工智能", "作为语言模型",
+                
+                // 常见客套与请求
+                "麻烦您", "麻烦你", "请问", "能不能", "帮我看看这", "帮我看看", "帮我改改", "请帮我写", "请帮我",
+                "能不能给我", "能不能麻烦你", "给我生成一个", "给我写一段", "帮我弄一个", "帮我写一个", "帮我写",
+                "我想让你", "我需要你", "帮我优化一下", "帮我翻译", "帮我分析一下", "帮我解决",
+                "谢谢你", "谢谢", "辛苦了", "拜托了", "感恩", 
+                "你好", "您好", "哈喽", "早上好", "下午好", "晚上好",
+                
+                // 自我开脱与过度解释
+                "我是个新手", "我是小白", "我不太懂", "我刚学", "仅供参考",
+                "其实说白了", "老实说", "说实话", "基本上", "实际上", "有没有办法", "我有一段代码",
+                
+                // 语气词与确认
+                "那个", "打扰一下", "不好意思", "抱歉", "解答一下", "请生成",
+                "完全正确", "确实", "没错", "对的", "是的", "好的", "没问题", "就是这样",
+                "作为ai", "可以给我", "我想要", "请你", "帮我", "我想", "给我"
+            ];

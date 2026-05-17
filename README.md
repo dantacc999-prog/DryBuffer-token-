@@ -1,2 +1,17 @@
 # DryBuffer-token-
 这是一个能帮你节约token的小插件，当你把一长串报错日志、带有嵌套格式的 JSON，或者是充满“麻烦您”、“请帮我”、“作为什么什么”等废话的 Prompt 发送给云端大模型时，你正在为这些毫无信息密度的“垃圾 Token”买单。  其实大模型不需要看人类的很多语气助词，也不需要人类的社交寒暄，只需要高密度的数据和纯粹的逻辑就可以完成任务，但有时候我们就是忍不住会输入一些没用的词汇无意间浪费Token，代码里包含了中英文输入时的高频率废话词典，直接物理层面过滤废话，即便你输入了也不会浪费资源
+
+快速开始 (Quick Start)
+DryBuffer 提供极简的 API，完全不需要改动你现有的业务逻辑。你可以把它当作任何 OpenAI 兼容接口的代理层。
+
+JavaScript
+import { DryBuffer } from 'drybuffer';
+
+const optimizer = new DryBuffer();
+const bloatedPrompt = "你好，作为人工智能，能不能麻烦你帮我看看这 100 行连续的 Timeout 报错？谢谢！\n" + logs;
+
+// 一键脱水
+const cleanPrompt = optimizer.compress(bloatedPrompt);
+
+// 发送给云端大模型，享受暴跌的账单
+const response = await aiClient.chat(cleanPrompt);
